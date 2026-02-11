@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MonoGameProject1", "MonoGameProject1\MonoGameProject1.csproj", "{1BE1F405-C243-41A8-85FB-3A1F2415C926}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenericGameLibrary", "GenericGameLibrary\GenericGameLibrary.csproj", "{3A111C2E-3B3F-4557-A990-8E97307DA54B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1BE1F405-C243-41A8-85FB-3A1F2415C926}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BE1F405-C243-41A8-85FB-3A1F2415C926}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BE1F405-C243-41A8-85FB-3A1F2415C926}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BE1F405-C243-41A8-85FB-3A1F2415C926}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3A111C2E-3B3F-4557-A990-8E97307DA54B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A111C2E-3B3F-4557-A990-8E97307DA54B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A111C2E-3B3F-4557-A990-8E97307DA54B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A111C2E-3B3F-4557-A990-8E97307DA54B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
