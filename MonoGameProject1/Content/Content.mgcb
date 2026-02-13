@@ -40,3 +40,6 @@
 /processorParam:TextureFormat=Color
 /build:Images/monogame_logo.png
 
+#begin Images/tilemap-definition.xml
+/copy:Images/tilemap-definition.xml
+
