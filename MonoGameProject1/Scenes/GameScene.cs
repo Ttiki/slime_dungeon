@@ -1,58 +1,80 @@
 using System;
+using DungeonSlime.UI;
+using Gum.DataTypes;
+using Gum.Forms.Controls;
+using Gum.Managers;
+using Gum.Wireframe;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using MonoGameGum;
+using MonoGameGum.GueDeriving;
 using MonoGameLibrary;
 using MonoGameLibrary.Graphics;
-using MonoGameLibrary.Input;
 using MonoGameLibrary.Scenes;
 
 namespace DungeonSlime.Scenes;
 
 public class GameScene : Scene
 {
-// Defines the slime animated sprite.
-    private AnimatedSprite _slime;
-
-// Defines the bat animated sprite.
-    private AnimatedSprite _bat;
-
-// Tracks the position of the slime.
-    private Vector2 _slimePosition;
-
-// Speed multiplier when moving.
+    // Speed multiplier when moving.
     private const float MOVEMENT_SPEED = 5.0f;
 
-// Tracks the position of the bat.
+    // Reference to the texture atlas that we can pass to UI elements when they
+    // are created.
+    private TextureAtlas _atlas;
+
+    // Defines the bat animated sprite.
+    private AnimatedSprite _bat;
+
+    // Tracks the position of the bat.
     private Vector2 _batPosition;
 
-// Tracks the velocity of the bat.
+    // Tracks the velocity of the bat.
     private Vector2 _batVelocity;
 
-// Defines the tilemap to draw.
-    private Tilemap _tilemap;
-
-// Defines the bounds of the room that the slime and bat are contained within.
-    private Rectangle _roomBounds;
-
-// The sound effect to play when the bat bounces off the edge of the screen.
+    // The sound effect to play when the bat bounces off the edge of the screen.
     private SoundEffect _bounceSoundEffect;
 
-// The sound effect to play when the slime eats a bat.
+    // The sound effect to play when the slime eats a bat.
     private SoundEffect _collectSoundEffect;
 
-// The SpriteFont Description used to draw text
+    // The SpriteFont Description used to draw text
     private SpriteFont _font;
 
-// Tracks the players score.
+    // A reference to the pause panel UI element so we can set its visibility
+    // when the game is paused.
+    private Panel _pausePanel;
+
+    // A reference to the resume button UI element so we can focus it
+    // when the game is paused.
+    private AnimatedButton _resumeButton;
+
+    // Defines the bounds of the room that the slime and bat are contained within.
+    private Rectangle _roomBounds;
+
+    // Tracks the players score.
     private int _score;
 
-// Defines the position to draw the score text at.
+    // Defines the origin used when drawing the score text.
+    private Vector2 _scoreTextOrigin;
+
+    // Defines the position to draw the score text at.
     private Vector2 _scoreTextPosition;
 
-// Defines the origin used when drawing the score text.
-    private Vector2 _scoreTextOrigin;
+    // Defines the slime animated sprite.
+    private AnimatedSprite _slime;
+
+    // Tracks the position of the slime.
+    private Vector2 _slimePosition;
+
+    // Defines the tilemap to draw.
+    private Tilemap _tilemap;
+
+    // The UI sound effect to play when a UI event is triggered.
+    private SoundEffect _uiSoundEffect;
+    
 
     public override void Initialize()
     {
@@ -63,7 +85,7 @@ public class GameScene : Scene
         // the escape key will be used to return back to the title screen
         Core.ExitOnEscape = false;
 
-        Rectangle screenBounds = Core.GraphicsDevice.PresentationParameters.Bounds;
+        var screenBounds = Core.GraphicsDevice.PresentationParameters.Bounds;
 
         _roomBounds = new Rectangle(
             (int)_tilemap.TileWidth,
@@ -73,8 +95,8 @@ public class GameScene : Scene
         );
 
         // Initial slime position will be the center tile of the tile map.
-        int centerRow = _tilemap.Rows / 2;
-        int centerColumn = _tilemap.Columns / 2;
+        var centerRow = _tilemap.Rows / 2;
+        var centerColumn = _tilemap.Columns / 2;
         _slimePosition = new Vector2(centerColumn * _tilemap.TileWidth, centerRow * _tilemap.TileHeight);
 
         // Initial bat position will the in the top left corner of the room.
@@ -85,24 +107,26 @@ public class GameScene : Scene
         _scoreTextPosition = new Vector2(_roomBounds.Left, _tilemap.TileHeight * 0.5f);
 
         // Set the origin of the text so it is left-centered.
-        float scoreTextYOrigin = _font.MeasureString("Score").Y * 0.5f;
+        var scoreTextYOrigin = _font.MeasureString("Score").Y * 0.5f;
         _scoreTextOrigin = new Vector2(0, scoreTextYOrigin);
 
         // Assign the initial random velocity to the bat.
         AssignRandomBatVelocity();
+
+        InitializeUI();
     }
 
     public override void LoadContent()
     {
-        // Create the texture atlas from the XML configuration file.
-        TextureAtlas atlas = TextureAtlas.FromFile(Core.Content, "images/atlas-definition.xml");
+        // Create the texture atlas from the XML configuration file
+        _atlas = TextureAtlas.FromFile(Core.Content, "images/atlas-definition.xml");
 
         // Create the slime animated sprite from the atlas.
-        _slime = atlas.CreateAnimatedSprite("slime-animation");
+        _slime = _atlas.CreateAnimatedSprite("slime-animation");
         _slime.Scale = new Vector2(4.0f, 4.0f);
 
         // Create the bat animated sprite from the atlas.
-        _bat = atlas.CreateAnimatedSprite("bat-animation");
+        _bat = _atlas.CreateAnimatedSprite("bat-animation");
         _bat.Scale = new Vector2(4.0f, 4.0f);
 
         // Create the tilemap from the XML configuration file.
@@ -117,10 +141,95 @@ public class GameScene : Scene
 
         // Load the font.
         _font = Core.Content.Load<SpriteFont>("fonts/04B_30");
+
+        // Load the sound effect to play when ui actions occur.
+        _uiSoundEffect = Core.Content.Load<SoundEffect>("audio/ui");
+    }
+
+    private void CreatePausePanel()
+    {
+        _pausePanel = new Panel();
+        _pausePanel.Anchor(Anchor.Center);
+        _pausePanel.WidthUnits = DimensionUnitType.Absolute;
+        _pausePanel.HeightUnits = DimensionUnitType.Absolute;
+        _pausePanel.Height = 70;
+        _pausePanel.Width = 264;
+        _pausePanel.IsVisible = false;
+        _pausePanel.AddToRoot();
+
+        var backgroundRegion = _atlas.GetRegion("panel-background");
+
+        var background = new NineSliceRuntime();
+        background.Dock(Dock.Fill);
+        background.Texture = backgroundRegion.Texture;
+        background.TextureAddress = TextureAddress.Custom;
+        background.TextureHeight = backgroundRegion.Height;
+        background.TextureLeft = backgroundRegion.SourceRectangle.Left;
+        background.TextureTop = backgroundRegion.SourceRectangle.Top;
+        background.TextureWidth = backgroundRegion.Width;
+        _pausePanel.AddChild(background);
+
+        var textInstance = new TextRuntime();
+        textInstance.Text = "PAUSED";
+        textInstance.CustomFontFile = @"fonts/04b_30.fnt";
+        textInstance.UseCustomFont = true;
+        textInstance.FontScale = 0.5f;
+        textInstance.X = 10f;
+        textInstance.Y = 10f;
+        _pausePanel.AddChild(textInstance);
+
+        _resumeButton = new AnimatedButton(_atlas);
+        _resumeButton.Text = "RESUME";
+        _resumeButton.Anchor(Anchor.BottomLeft);
+        _resumeButton.X = 9f;
+        _resumeButton.Y = -9f;
+        _resumeButton.Click += HandleResumeButtonClicked;
+        _pausePanel.AddChild(_resumeButton);
+
+        var quitButton = new AnimatedButton(_atlas);
+        quitButton.Text = "QUIT";
+        quitButton.Anchor(Anchor.BottomRight);
+        quitButton.X = -9f;
+        quitButton.Y = -9f;
+        quitButton.Click += HandleQuitButtonClicked;
+
+        _pausePanel.AddChild(quitButton);
+    }
+
+
+    private void HandleResumeButtonClicked(object sender, EventArgs e)
+    {
+        // A UI interaction occurred, play the sound effect
+        Core.Audio.PlaySoundEffect(_uiSoundEffect);
+
+        // Make the pause panel invisible to resume the game.
+        _pausePanel.IsVisible = false;
+    }
+
+    private void HandleQuitButtonClicked(object sender, EventArgs e)
+    {
+        // A UI interaction occurred, play the sound effect
+        Core.Audio.PlaySoundEffect(_uiSoundEffect);
+
+        // Go back to the title scene.
+        Core.ChangeScene(new TitleScene());
+    }
+
+    private void InitializeUI()
+    {
+        GumService.Default.Root.Children.Clear();
+
+        CreatePausePanel();
     }
 
     public override void Update(GameTime gameTime)
     {
+        // Ensure the UI is always updated
+        GumService.Default.Update(gameTime);
+
+        // If the game is paused, do not continue
+        if (_pausePanel.IsVisible) return;
+
         // Update the slime animated sprite.
         _slime.Update(gameTime);
 
@@ -134,9 +243,9 @@ public class GameScene : Scene
         CheckGamePadInput();
 
         // Creating a bounding circle for the slime.
-        Circle slimeBounds = new Circle(
-            (int)(_slimePosition.X + (_slime.Width * 0.5f)),
-            (int)(_slimePosition.Y + (_slime.Height * 0.5f)),
+        var slimeBounds = new Circle(
+            (int)(_slimePosition.X + _slime.Width * 0.5f),
+            (int)(_slimePosition.Y + _slime.Height * 0.5f),
             (int)(_slime.Width * 0.5f)
         );
 
@@ -144,34 +253,24 @@ public class GameScene : Scene
         // bounds of the game screen, and if it is outside that screen edge,
         // move it back inside.
         if (slimeBounds.Left < _roomBounds.Left)
-        {
             _slimePosition.X = _roomBounds.Left;
-        }
-        else if (slimeBounds.Right > _roomBounds.Right)
-        {
-            _slimePosition.X = _roomBounds.Right - _slime.Width;
-        }
+        else if (slimeBounds.Right > _roomBounds.Right) _slimePosition.X = _roomBounds.Right - _slime.Width;
 
         if (slimeBounds.Top < _roomBounds.Top)
-        {
             _slimePosition.Y = _roomBounds.Top;
-        }
-        else if (slimeBounds.Bottom > _roomBounds.Bottom)
-        {
-            _slimePosition.Y = _roomBounds.Bottom - _slime.Height;
-        }
+        else if (slimeBounds.Bottom > _roomBounds.Bottom) _slimePosition.Y = _roomBounds.Bottom - _slime.Height;
 
         // Calculate the new position of the bat based on the velocity.
-        Vector2 newBatPosition = _batPosition + _batVelocity;
+        var newBatPosition = _batPosition + _batVelocity;
 
         // Create a bounding circle for the bat.
-        Circle batBounds = new Circle(
-            (int)(newBatPosition.X + (_bat.Width * 0.5f)),
-            (int)(newBatPosition.Y + (_bat.Height * 0.5f)),
+        var batBounds = new Circle(
+            (int)(newBatPosition.X + _bat.Width * 0.5f),
+            (int)(newBatPosition.Y + _bat.Height * 0.5f),
             (int)(_bat.Width * 0.5f)
         );
 
-        Vector2 normal = Vector2.Zero;
+        var normal = Vector2.Zero;
 
         // Use distance based checks to determine if the bat is within the
         // bounds of the game screen, and if it is outside that screen edge,
@@ -215,8 +314,8 @@ public class GameScene : Scene
         if (slimeBounds.Intersects(batBounds))
         {
             // Choose a random row and column based on the total number of each
-            int column = Random.Shared.Next(1, _tilemap.Columns - 1);
-            int row = Random.Shared.Next(1, _tilemap.Rows - 1);
+            var column = Random.Shared.Next(1, _tilemap.Columns - 1);
+            var row = Random.Shared.Next(1, _tilemap.Rows - 1);
 
             // Change the bat position by setting the x and y values equal to
             // the column and row multiplied by the width and height.
@@ -237,12 +336,12 @@ public class GameScene : Scene
     private void AssignRandomBatVelocity()
     {
         // Generate a random angle.
-        float angle = (float)(Random.Shared.NextDouble() * Math.PI * 2);
+        var angle = (float)(Random.Shared.NextDouble() * Math.PI * 2);
 
         // Convert angle to a direction vector.
-        float x = (float)Math.Cos(angle);
-        float y = (float)Math.Sin(angle);
-        Vector2 direction = new Vector2(x, y);
+        var x = (float)Math.Cos(angle);
+        var y = (float)Math.Sin(angle);
+        var direction = new Vector2(x, y);
 
         // Multiply the direction vector by the movement speed
         _batVelocity = direction * MOVEMENT_SPEED;
@@ -251,50 +350,36 @@ public class GameScene : Scene
     private void CheckKeyboardInput()
     {
         // Get a reference to the keyboard inof
-        KeyboardInfo keyboard = Core.Input.Keyboard;
+        var keyboard = Core.Input.Keyboard;
 
-        // If the escape key is pressed, return to the title screen.
+        // If the escape key is pressed, pause the game.
         if (Core.Input.Keyboard.WasKeyJustPressed(Keys.Escape))
         {
-            Core.ChangeScene(new TitleScene());
+            PauseGame();
+            return;
         }
+
+        // If the escape key is pressed, return to the title screen.
+        if (Core.Input.Keyboard.WasKeyJustPressed(Keys.Escape)) Core.ChangeScene(new TitleScene());
 
         // If the space key is held down, the movement speed increases by 1.5
-        float speed = MOVEMENT_SPEED;
-        if (keyboard.IsKeyDown(Keys.Space))
-        {
-            speed *= 1.5f;
-        }
+        var speed = MOVEMENT_SPEED;
+        if (keyboard.IsKeyDown(Keys.Space)) speed *= 1.5f;
 
         // If the W or Up keys are down, move the slime up on the screen.
-        if (keyboard.IsKeyDown(Keys.W) || keyboard.IsKeyDown(Keys.Up))
-        {
-            _slimePosition.Y -= speed;
-        }
+        if (keyboard.IsKeyDown(Keys.W) || keyboard.IsKeyDown(Keys.Up)) _slimePosition.Y -= speed;
 
         // if the S or Down keys are down, move the slime down on the screen.
-        if (keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down))
-        {
-            _slimePosition.Y += speed;
-        }
+        if (keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down)) _slimePosition.Y += speed;
 
         // If the A or Left keys are down, move the slime left on the screen.
-        if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left))
-        {
-            _slimePosition.X -= speed;
-        }
+        if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left)) _slimePosition.X -= speed;
 
         // If the D or Right keys are down, move the slime right on the screen.
-        if (keyboard.IsKeyDown(Keys.D) || keyboard.IsKeyDown(Keys.Right))
-        {
-            _slimePosition.X += speed;
-        }
+        if (keyboard.IsKeyDown(Keys.D) || keyboard.IsKeyDown(Keys.Right)) _slimePosition.X += speed;
 
         // If the M key is pressed, toggle mute state for audio.
-        if (keyboard.WasKeyJustPressed(Keys.M))
-        {
-            Core.Audio.ToggleMute();
-        }
+        if (keyboard.WasKeyJustPressed(Keys.M)) Core.Audio.ToggleMute();
 
         // If the + button is pressed, increase the volume.
         if (keyboard.WasKeyJustPressed(Keys.OemPlus))
@@ -314,11 +399,18 @@ public class GameScene : Scene
     private void CheckGamePadInput()
     {
         // Get the gamepad info for gamepad one.
-        GamePadInfo gamePadOne = Core.Input.GamePads[(int)PlayerIndex.One];
+        var gamePadOne = Core.Input.GamePads[(int)PlayerIndex.One];
+
+        // If the start button is pressed, pause the game
+        if (gamePadOne.WasButtonJustPressed(Buttons.Start))
+        {
+            PauseGame();
+            return;
+        }
 
         // If the A button is held down, the movement speed increases by 1.5
         // and the gamepad vibrates as feedback to the player.
-        float speed = MOVEMENT_SPEED;
+        var speed = MOVEMENT_SPEED;
         if (gamePadOne.IsButtonDown(Buttons.A))
         {
             speed *= 1.5f;
@@ -340,28 +432,16 @@ public class GameScene : Scene
         else
         {
             // If DPadUp is down, move the slime up on the screen.
-            if (gamePadOne.IsButtonDown(Buttons.DPadUp))
-            {
-                _slimePosition.Y -= speed;
-            }
+            if (gamePadOne.IsButtonDown(Buttons.DPadUp)) _slimePosition.Y -= speed;
 
             // If DPadDown is down, move the slime down on the screen.
-            if (gamePadOne.IsButtonDown(Buttons.DPadDown))
-            {
-                _slimePosition.Y += speed;
-            }
+            if (gamePadOne.IsButtonDown(Buttons.DPadDown)) _slimePosition.Y += speed;
 
             // If DPapLeft is down, move the slime left on the screen.
-            if (gamePadOne.IsButtonDown(Buttons.DPadLeft))
-            {
-                _slimePosition.X -= speed;
-            }
+            if (gamePadOne.IsButtonDown(Buttons.DPadLeft)) _slimePosition.X -= speed;
 
             // If DPadRight is down, move the slime right on the screen.
-            if (gamePadOne.IsButtonDown(Buttons.DPadRight))
-            {
-                _slimePosition.X += speed;
-            }
+            if (gamePadOne.IsButtonDown(Buttons.DPadRight)) _slimePosition.X += speed;
         }
     }
 
@@ -397,5 +477,17 @@ public class GameScene : Scene
 
         // Always end the sprite batch when finished.
         Core.SpriteBatch.End();
+
+        // Draw the Gum UI
+        GumService.Default.Draw();
+    }
+
+    private void PauseGame()
+    {
+        // Make the pause panel UI element visible.
+        _pausePanel.IsVisible = true;
+
+        // Set the resume button to have focus
+        _resumeButton.IsFocused = true;
     }
 }
